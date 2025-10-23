@@ -1,17 +1,15 @@
 import { createWriteStream } from "node:fs";
 import { mkdir } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
-import path from "node:path";
 import { pipeline } from "node:stream/promises";
 import { FastifyRequest, FastifyReply } from "fastify";
 import { DateTime } from "luxon";
 import { z } from "zod";
-import { IS_CLOUD } from "../../lib/const.js";
 import { getUserHasAdminAccessToSite } from "../../lib/auth-utils.js";
 import { getJobQueue } from "../../queues/jobQueueFactory.js";
 import { ImportLimiter } from "../../services/import/importLimiter.js";
-import { ImportStatusManager } from "../../services/import/importStatusManager.js";
-import { deleteImportFile } from "../../services/import/utils.js";
+import { updateImportStatus } from "../../services/import/importStatusManager.js";
+import { deleteImportFile, getImportStorageLocation } from "../../services/import/utils.js";
 import { CSV_PARSE_QUEUE } from "../../services/import/workers/jobs.js";
 import { r2Storage } from "../../services/storage/r2StorageService.js";
 
@@ -27,25 +25,24 @@ const importDataFieldsSchema = z
     fields: z
       .object({
         source: z.enum(["umami"]),
-        startDate: z.string().refine(isValidDate).optional(),
-        endDate: z.string().refine(isValidDate).optional(),
+        startDate: z.string().refine(isValidDate, { message: "Invalid start date format" }).optional(),
+        endDate: z.string().refine(isValidDate, { message: "Invalid end date format" }).optional(),
       })
-      .refine(fields => {
-        if (fields.startDate && fields.endDate) {
-          const start = parseDate(fields.startDate);
-          const end = parseDate(fields.endDate);
-          return start <= end;
-        }
-        return true;
-      })
-      .refine(fields => {
-        if (fields.startDate) {
+      .refine(
+        data => {
+          if (!data.startDate || !data.endDate) return true;
+          return parseDate(data.startDate) <= parseDate(data.endDate);
+        },
+        { message: "Start date must be before or equal to end date" }
+      )
+      .refine(
+        data => {
+          if (!data.startDate) return true;
           const today = DateTime.utc().startOf("day");
-          const start = parseDate(fields.startDate);
-          return start <= today;
-        }
-        return true;
-      }),
+          return parseDate(data.startDate) <= today;
+        },
+        { message: "Start date cannot be in the future" }
+      ),
   })
   .strict();
 
@@ -78,11 +75,6 @@ export async function importSiteData(request: FastifyRequest<ImportDataRequest>,
       return reply.status(403).send({ error: "Forbidden" });
     }
 
-    const concurrentImportLimitResult = await ImportLimiter.checkConcurrentImportLimit(Number(site));
-    if (!concurrentImportLimitResult.allowed) {
-      return reply.status(429).send({ error: concurrentImportLimitResult.reason });
-    }
-
     const data = await request.file();
     if (!data) {
       return reply.status(400).send({ error: "No file uploaded." });
@@ -105,41 +97,45 @@ export async function importSiteData(request: FastifyRequest<ImportDataRequest>,
     }
 
     const { source, startDate, endDate } = parsedFields.data.fields;
-    const organization = concurrentImportLimitResult.organizationId;
+    const siteId = Number(site);
     const importId = randomUUID();
 
-    await ImportStatusManager.createImportStatus({
+    // Check organization and get initial limit check
+    const concurrentImportLimitResult = await ImportLimiter.checkConcurrentImportLimit(siteId);
+    if (!concurrentImportLimitResult.allowed) {
+      return reply.status(429).send({ error: concurrentImportLimitResult.reason });
+    }
+
+    const organization = concurrentImportLimitResult.organizationId;
+
+    // Atomically create import status with concurrency check to prevent race conditions
+    const createResult = await ImportLimiter.createImportWithConcurrencyCheck({
       importId,
-      siteId: Number(site),
+      siteId,
       organizationId: organization,
       source,
       status: "pending",
       fileName: data.filename,
     });
 
-    let storageLocation: string;
+    if (!createResult.success) {
+      return reply.status(429).send({ error: createResult.reason });
+    }
+
+    const storage = getImportStorageLocation(importId, data.filename);
 
     try {
-      if (IS_CLOUD && r2Storage.isEnabled()) {
-        const r2Key = `imports/${importId}/${data.filename}`;
-
-        await r2Storage.storeImportFile(r2Key, data.file);
-        storageLocation = r2Key;
-
-        console.log(`[Import] File streamed to R2: ${r2Key}`);
+      if (storage.isR2) {
+        await r2Storage.storeImportFile(storage.location, data.file);
+        console.log(`[Import] File streamed to R2: ${storage.location}`);
       } else {
         const importDir = "/tmp/imports";
-        const savedFileName = `${importId}.csv`;
-        const tempFilePath = path.join(importDir, savedFileName);
-
         await mkdir(importDir, { recursive: true });
-        await pipeline(data.file, createWriteStream(tempFilePath));
-        storageLocation = tempFilePath;
-
-        console.log(`[Import] File stored locally: ${tempFilePath}`);
+        await pipeline(data.file, createWriteStream(storage.location));
+        console.log(`[Import] File stored locally: ${storage.location}`);
       }
     } catch (fileError) {
-      await ImportStatusManager.updateStatus(importId, "failed", "Failed to save uploaded file");
+      await updateImportStatus(importId, "failed", "Failed to save uploaded file");
       console.error("Failed to save uploaded file:", fileError);
       return reply.status(500).send({ error: "Could not process file upload." });
     }
@@ -150,15 +146,15 @@ export async function importSiteData(request: FastifyRequest<ImportDataRequest>,
         site,
         importId,
         source,
-        storageLocation,
-        isR2Storage: IS_CLOUD && r2Storage.isEnabled(),
+        storageLocation: storage.location,
+        isR2Storage: storage.isR2,
         organization,
         startDate,
         endDate,
       });
     } catch (queueError) {
-      await ImportStatusManager.updateStatus(importId, "failed", "Failed to queue import job");
-      await deleteImportFile(storageLocation, IS_CLOUD && r2Storage.isEnabled());
+      await updateImportStatus(importId, "failed", "Failed to queue import job");
+      await deleteImportFile(storage.location, storage.isR2);
       console.error("Failed to enqueue import job:", queueError);
       return reply.status(500).send({ error: "Failed to initiate import process." });
     }

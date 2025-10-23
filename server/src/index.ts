@@ -75,6 +75,7 @@ import { trackEvent } from "./services/tracker/trackEvent.js";
 // need to import telemetry service here to start it
 import { telemetryService } from "./services/telemetryService.js";
 import { weeklyReportService } from "./services/weekyReports/weeklyReportService.js";
+import { importCleanupService } from "./services/import/importCleanupService.js";
 import { extractSiteId } from "./utils.js";
 import { getTrackingConfig } from "./api/sites/getTrackingConfig.js";
 import { getSiteImports } from "./api/sites/getSiteImports.js";
@@ -440,6 +441,9 @@ const start = async () => {
     await createJobQueues();
     await registerCsvParseWorker();
     await registerDataInsertWorker();
+
+    // Initialize import cleanup service (runs daily to clean up old import files)
+    importCleanupService.initializeCleanupCron();
 
     // Start the server first
     await server.listen({ port: 3001, host: "0.0.0.0" });

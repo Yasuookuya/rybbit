@@ -2,7 +2,7 @@ import { getJobQueue } from "../../../queues/jobQueueFactory.js";
 import { UmamiImportMapper } from "../mappings/umami.js";
 import { DataInsertJob, DATA_INSERT_QUEUE } from "./jobs.js";
 import { clickhouse } from "../../../db/clickhouse/clickhouse.js";
-import { ImportStatusManager } from "../importStatusManager.js";
+import { updateImportStatus, updateImportProgress } from "../importStatusManager.js";
 
 const getImportDataMapping = (source: string) => {
   switch (source) {
@@ -22,14 +22,14 @@ export async function registerDataInsertWorker() {
     // Handle finalization signal
     if (allChunksSent) {
       try {
-        await ImportStatusManager.updateStatus(importId, "completed");
+        await updateImportStatus(importId, "completed");
         console.log(`[Import ${importId}] Completed successfully (${totalChunks ?? 0} chunks processed)`);
         return;
       } catch (error) {
         console.error(`[Import ${importId}] Failed to mark as completed:`, error);
         // Try to update to failed status, but don't crash worker
         try {
-          await ImportStatusManager.updateStatus(importId, "failed", "Failed to complete import");
+          await updateImportStatus(importId, "failed", "Failed to complete import");
         } catch (updateError) {
           console.error(`[Import ${importId}] Could not update status to failed:`, updateError);
         }
@@ -52,7 +52,7 @@ export async function registerDataInsertWorker() {
 
       // Update progress (non-critical - log if fails but don't crash)
       try {
-        await ImportStatusManager.updateProgress(importId, transformedRecords.length);
+        await updateImportProgress(importId, transformedRecords.length);
       } catch (progressError) {
         console.warn(
           `[Import ${importId}] Progress update failed (data inserted successfully):`,
@@ -72,7 +72,7 @@ export async function registerDataInsertWorker() {
           : "Data insertion failed due to unknown error";
 
       try {
-        await ImportStatusManager.updateStatus(importId, "failed", safeMessage);
+        await updateImportStatus(importId, "failed", safeMessage);
       } catch (updateError) {
         console.error(`[Import ${importId}] Could not update status to failed:`, updateError);
       }

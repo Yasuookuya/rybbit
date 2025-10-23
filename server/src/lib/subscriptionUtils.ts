@@ -38,6 +38,7 @@ export function getTierInfo(planName: string): TierInfo {
   }
 
   // Default to free tier for unknown plans
+  console.warn(`Unknown plan name: "${planName}", defaulting to Free tier`);
   return {
     tier: "Free",
     monthsAllowed: 6,

@@ -1,10 +1,8 @@
 import { FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { getUserHasAdminAccessToSite } from "../../lib/auth-utils.js";
-import { ImportStatusManager } from "../../services/import/importStatusManager.js";
-import { deleteImportFile } from "../../services/import/utils.js";
-import { IS_CLOUD } from "../../lib/const.js";
-import { r2Storage } from "../../services/storage/r2StorageService.js";
+import { getImportById, deleteImport } from "../../services/import/importStatusManager.js";
+import { deleteImportFile, getImportStorageLocation } from "../../services/import/utils.js";
 import { clickhouse } from "../../db/clickhouse/clickhouse.js";
 
 const deleteImportRequestSchema = z
@@ -37,7 +35,7 @@ export async function deleteSiteImport(request: FastifyRequest<DeleteImportReque
       return reply.status(403).send({ error: "Forbidden" });
     }
 
-    const importRecord = await ImportStatusManager.getImportById(importId);
+    const importRecord = await getImportById(importId);
     if (!importRecord) {
       return reply.status(404).send({ error: "Import not found" });
     }
@@ -50,19 +48,17 @@ export async function deleteSiteImport(request: FastifyRequest<DeleteImportReque
       return reply.status(400).send({ error: "Cannot delete active import" });
     }
 
-    // Delete the import file if it exists
-    try {
-      let storageLocation: string;
-      if (IS_CLOUD && r2Storage.isEnabled()) {
-        storageLocation = `imports/${importId}/${importRecord.fileName}`;
-      } else {
-        storageLocation = `/tmp/imports/${importId}.csv`;
-      }
+    const siteId = Number(site);
 
-      await deleteImportFile(storageLocation, IS_CLOUD && r2Storage.isEnabled());
-    } catch (fileError) {
-      // Log the error but don't fail the deletion - the file might not exist
-      console.warn(`Failed to delete import file for ${importId}:`, fileError);
+    // Delete the import record from the database FIRST (fail fast)
+    // If this fails, we haven't deleted any data yet
+    try {
+      await deleteImport(importId);
+    } catch (dbError) {
+      console.error(`Failed to delete import record ${importId}:`, dbError);
+      return reply.status(500).send({
+        error: "Failed to delete import record",
+      });
     }
 
     // Delete events from ClickHouse that were imported with this importId
@@ -72,7 +68,7 @@ export async function deleteSiteImport(request: FastifyRequest<DeleteImportReque
         query: `DELETE FROM events WHERE import_id = {importId:String} AND site_id = {siteId:UInt16}`,
         query_params: {
           importId: importId,
-          siteId: Number(site),
+          siteId: siteId,
         },
       });
       console.log(`Deleted events for import ${importId} from ClickHouse`);
@@ -83,14 +79,12 @@ export async function deleteSiteImport(request: FastifyRequest<DeleteImportReque
       });
     }
 
-    // Delete the import record from the database
-    try {
-      await ImportStatusManager.deleteImport(importId);
-    } catch (dbError) {
-      console.error(`Failed to delete import record ${importId}:`, dbError);
-      return reply.status(500).send({
-        error: "Import events deleted but failed to remove import record",
-      });
+    // Delete the import file if it exists
+    // This is best-effort - we don't fail the entire operation if the file is already gone
+    const storage = getImportStorageLocation(importId, importRecord.fileName);
+    const deleteResult = await deleteImportFile(storage.location, storage.isR2);
+    if (!deleteResult.success) {
+      console.warn(`Failed to delete import file for ${importId}: ${deleteResult.error}`);
     }
 
     return reply.send({

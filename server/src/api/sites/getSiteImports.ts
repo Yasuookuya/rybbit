@@ -1,6 +1,6 @@
 import { FastifyReply, FastifyRequest } from "fastify";
 import { getUserHasAdminAccessToSite } from "../../lib/auth-utils.js";
-import { ImportStatusManager } from "../../services/import/importStatusManager.js";
+import { getImportsForSite } from "../../services/import/importStatusManager.js";
 import { z } from "zod";
 
 const getSiteImportsRequestSchema = z
@@ -26,23 +26,24 @@ export async function getSiteImports(request: FastifyRequest<GetSiteImportsReque
     }
 
     const { site } = parsed.data.params;
+    const siteId = Number(site);
 
     const userHasAccess = await getUserHasAdminAccessToSite(request, site);
     if (!userHasAccess) {
       return reply.status(403).send({ error: "Forbidden" });
     }
 
-    const imports = await ImportStatusManager.getImportsForSite(Number(site));
+    const imports = await getImportsForSite(siteId);
 
     return reply.send({
-      data: imports.map(imp => ({
-        importId: imp.importId,
-        source: imp.source,
-        status: imp.status,
-        importedEvents: imp.importedEvents,
-        errorMessage: imp.errorMessage,
-        startedAt: imp.startedAt,
-        fileName: imp.fileName,
+      data: imports.map(({ importId, source, status, importedEvents, errorMessage, startedAt, fileName }) => ({
+        importId,
+        source,
+        status,
+        importedEvents,
+        errorMessage,
+        startedAt,
+        fileName,
       })),
     });
   } catch (error) {

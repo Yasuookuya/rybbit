@@ -175,8 +175,11 @@ export class BullMQAdapter implements IJobQueue {
             data: job.data,
           };
 
-          // BullMQ processes one job at a time per worker
-          // We wrap it in an array to match the interface
+          // NOTE: Interface Impedance Mismatch
+          // BullMQ processes one job at a time per worker, while pg-boss can batch jobs.
+          // The IJobQueue interface expects handlers to accept arrays to support pg-boss batching.
+          // Here we wrap single BullMQ jobs in an array to maintain interface compatibility.
+          // This is an acceptable tradeoff: pg-boss gets true batching, BullMQ gets array of 1 item.
           await handler([normalizedJob]);
         },
         {

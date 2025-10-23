@@ -7,13 +7,6 @@ import { processResults } from "../../api/analytics/utils.js";
 import { getOrganizationSubscriptionInfo } from "../../lib/subscriptionUtils.js";
 import { IS_CLOUD } from "../../lib/const.js";
 
-export interface MonthlyQuotaInfo {
-  month: string; // "202501" format
-  used: number;
-  limit: number;
-  remaining: number;
-}
-
 export class ImportQuotaTracker {
   private monthlyUsage: Map<string, number>;
   private readonly monthlyLimit: number;
@@ -75,66 +68,65 @@ export class ImportQuotaTracker {
     const newSites = siteIds.filter(id => id >= 2000);
 
     try {
-      // Query grandfathered sites (pageviews only)
-      if (grandfatheredSites.length > 0) {
-        const grandfatheredResult = await clickhouse.query({
-          query: `
-            SELECT
-              toYYYYMM(timestamp) as month,
-              COUNT(*) as count
-            FROM events
-            WHERE site_id IN {siteIds:Array(Int32)}
-              AND type = 'pageview'
-              AND timestamp >= toDate({startDate:String})
-            GROUP BY month
-            ORDER BY month
-          `,
-          query_params: {
-            siteIds: grandfatheredSites,
-            startDate: startDate,
-          },
-          format: "JSONEachRow",
-        });
+      // Combine queries into a single UNION query for better performance
+      // Grandfathered sites (< 2000): count pageviews only
+      // New sites (>= 2000): count pageviews, custom_events, and performance events
+      const result = await clickhouse.query({
+        query: `
+          SELECT
+            toYYYYMM(timestamp) as month,
+            SUM(count) as count
+          FROM (
+            ${
+              grandfatheredSites.length > 0
+                ? `
+              SELECT
+                timestamp,
+                1 as count
+              FROM events
+              WHERE site_id IN {grandfatheredSites:Array(Int32)}
+                AND type = 'pageview'
+                AND timestamp >= toDate({startDate:String})
+            `
+                : ""
+            }
+            ${grandfatheredSites.length > 0 && newSites.length > 0 ? "UNION ALL" : ""}
+            ${
+              newSites.length > 0
+                ? `
+              SELECT
+                timestamp,
+                1 as count
+              FROM events
+              WHERE site_id IN {newSites:Array(Int32)}
+                AND type IN ('pageview', 'custom_event', 'performance')
+                AND timestamp >= toDate({startDate:String})
+            `
+                : ""
+            }
+          )
+          GROUP BY month
+          ORDER BY month
+        `,
+        query_params: {
+          ...(grandfatheredSites.length > 0 && { grandfatheredSites }),
+          ...(newSites.length > 0 && { newSites }),
+          startDate: startDate,
+        },
+        format: "JSONEachRow",
+      });
 
-        const rows = await processResults<{ month: string; count: number }>(grandfatheredResult);
-        for (const row of rows) {
-          const existing = monthlyUsage.get(row.month) || 0;
-          monthlyUsage.set(row.month, existing + row.count);
-        }
-      }
-
-      // Query new sites (all event types)
-      if (newSites.length > 0) {
-        const newSitesResult = await clickhouse.query({
-          query: `
-            SELECT
-              toYYYYMM(timestamp) as month,
-              COUNT(*) as count
-            FROM events
-            WHERE site_id IN {siteIds:Array(Int32)}
-              AND type IN ('pageview', 'custom_event', 'performance')
-              AND timestamp >= toDate({startDate:String})
-            GROUP BY month
-            ORDER BY month
-          `,
-          query_params: {
-            siteIds: newSites,
-            startDate: startDate,
-          },
-          format: "JSONEachRow",
-        });
-
-        const rows = await processResults<{ month: string; count: number }>(newSitesResult);
-        for (const row of rows) {
-          const existing = monthlyUsage.get(row.month) || 0;
-          monthlyUsage.set(row.month, existing + row.count);
-        }
+      const rows = await processResults<{ month: string; count: number }>(result);
+      for (const row of rows) {
+        monthlyUsage.set(row.month, row.count);
       }
 
       return monthlyUsage;
     } catch (error) {
       console.error(`Error querying ClickHouse for monthly usage:`, error);
-      return new Map();
+      throw new Error(
+        `Failed to query monthly usage for quota check: ${error instanceof Error ? error.message : "Unknown error"}`
+      );
     }
   }
 
@@ -164,33 +156,6 @@ export class ImportQuotaTracker {
     return true;
   }
 
-  getMonthQuota(month: string): MonthlyQuotaInfo {
-    const used = this.monthlyUsage.get(month) || 0;
-    return {
-      month,
-      used,
-      limit: this.monthlyLimit,
-      remaining: Math.max(0, this.monthlyLimit - used),
-    };
-  }
-
-  getAllMonthQuotas(): MonthlyQuotaInfo[] {
-    const quotas: MonthlyQuotaInfo[] = [];
-
-    if (this.monthlyLimit === Infinity) {
-      return quotas;
-    }
-
-    const now = DateTime.utc();
-    for (let i = 0; i < this.historicalWindowMonths; i++) {
-      const monthDate = now.minus({ months: i }).startOf("month");
-      const month = monthDate.toFormat("yyyyMM");
-      quotas.push(this.getMonthQuota(month));
-    }
-
-    return quotas.reverse();
-  }
-
   getSummary(): {
     totalMonthsInWindow: number;
     monthsAtCapacity: number;
@@ -206,13 +171,18 @@ export class ImportQuotaTracker {
       };
     }
 
-    const quotas = this.getAllMonthQuotas();
-    const monthsAtCapacity = quotas.filter(q => q.remaining === 0).length;
+    // Calculate directly from stored data instead of regenerating all monthly quotas
+    let monthsAtCapacity = 0;
+    for (const usage of this.monthlyUsage.values()) {
+      if (usage >= this.monthlyLimit) {
+        monthsAtCapacity++;
+      }
+    }
 
     return {
       totalMonthsInWindow: this.historicalWindowMonths,
       monthsAtCapacity,
-      monthsWithSpace: quotas.length - monthsAtCapacity,
+      monthsWithSpace: this.historicalWindowMonths - monthsAtCapacity,
       oldestAllowedMonth: this.oldestAllowedMonth,
     };
   }

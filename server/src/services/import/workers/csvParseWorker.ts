@@ -6,7 +6,7 @@ import { getJobQueue } from "../../../queues/jobQueueFactory.js";
 import { r2Storage } from "../../storage/r2StorageService.js";
 import { CSV_PARSE_QUEUE, CsvParseJob, DATA_INSERT_QUEUE } from "./jobs.js";
 import { UmamiEvent, umamiHeaders } from "../mappings/umami.js";
-import { ImportStatusManager } from "../importStatusManager.js";
+import { updateImportStatus } from "../importStatusManager.js";
 import { ImportLimiter } from "../importLimiter.js";
 import { deleteImportFile } from "../utils.js";
 
@@ -109,7 +109,13 @@ export async function registerCsvParseWorker() {
         ? await createR2FileStream(storageLocation, source)
         : await createLocalFileStream(storageLocation, source);
 
-      await ImportStatusManager.updateStatus(importId, "processing");
+      // Add explicit error handler before starting to consume the stream
+      stream.on("error", error => {
+        console.error(`[Import ${importId}] Stream error:`, error);
+        // Error will be caught by the outer try/catch
+      });
+
+      await updateImportStatus(importId, "processing");
 
       // Set timeout to prevent indefinite processing
       processingTimeout = setTimeout(() => {
@@ -175,7 +181,7 @@ export async function registerCsvParseWorker() {
           `No events could be imported. All ${totalSkippedQuota} events exceeded monthly quotas or fell outside the ${quotaSummary.totalMonthsInWindow}-month historical window. ` +
           `${quotaSummary.monthsAtCapacity} of ${quotaSummary.totalMonthsInWindow} months are at full capacity. ` +
           `Try importing newer data or upgrade your plan for higher monthly quotas.`;
-        await ImportStatusManager.updateStatus(importId, "failed", errorMessage);
+        await updateImportStatus(importId, "failed", errorMessage);
         const deleteResult = await deleteImportFile(storageLocation, isR2Storage);
         if (!deleteResult.success) {
           console.warn(`[Import ${importId}] File cleanup failed: ${deleteResult.error}`);
@@ -214,7 +220,7 @@ export async function registerCsvParseWorker() {
           ? error.message.replace(/\/[^\s]+/g, "[path]").substring(0, 500)
           : "An unexpected error occurred during import processing";
 
-      await ImportStatusManager.updateStatus(importId, "failed", safeMessage);
+      await updateImportStatus(importId, "failed", safeMessage);
 
       // Don't re-throw - worker should continue processing other jobs
       console.error(`[Import ${importId}] Import failed, worker continuing`);
