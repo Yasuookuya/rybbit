@@ -34,16 +34,16 @@ class ImportCleanupService {
   }
 
   /**
-   * Clean up orphaned import files that are more than 7 days old
+   * Clean up orphaned import files that are more than 1 day old
    * and belong to completed or failed imports.
    */
   private async cleanupOrphanedFiles() {
     console.info("[ImportCleanup] Starting cleanup of orphaned import files");
 
-    const sevenDaysAgo = DateTime.utc().minus({ days: 7 }).toISO();
+    const oneDayAgo = DateTime.utc().minus({ days: 1 }).toISO();
 
     try {
-      // Find completed/failed imports older than 7 days that still have files
+      // Find completed/failed imports older than 1 day that still have files
       const oldImports = await db
         .select({
           importId: importStatus.importId,
@@ -52,7 +52,7 @@ class ImportCleanupService {
         .from(importStatus)
         .where(
           sql`${importStatus.status} IN ('completed', 'failed')
-              AND ${importStatus.startedAt} < ${sevenDaysAgo}`
+              AND ${importStatus.startedAt} < ${oneDayAgo}`
         );
 
       console.info(`[ImportCleanup] Found ${oldImports.length} old imports to check`);
