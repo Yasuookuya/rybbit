@@ -14,10 +14,11 @@ import { IS_CLOUD } from "../../lib/const.js";
 import { createServiceLogger } from "../../lib/logger/logger.js";
 
 class R2StorageService {
-  private client: S3Client | null = null;
-  private bucketName: string = "";
-  private enabled: boolean = false;
+  private readonly client: S3Client | null = null;
+  private readonly bucketName: string = "";
+  private readonly enabled: boolean = false;
   private logger = createServiceLogger("r2-storage");
+  private readonly IMPORT_FILES_PREFIX = "imports/";
 
   constructor() {
     // Only initialize R2 in cloud environment
@@ -324,7 +325,7 @@ class R2StorageService {
         const response = await this.client.send(
           new ListObjectsV2Command({
             Bucket: this.bucketName,
-            Prefix: "imports/",
+            Prefix: this.IMPORT_FILES_PREFIX,
             ContinuationToken: continuationToken,
           })
         );
