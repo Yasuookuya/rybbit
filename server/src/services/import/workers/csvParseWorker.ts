@@ -43,28 +43,21 @@ const createLocalFileStream = async (storageLocation: string, platform: string) 
   );
 };
 
-/**
- * Create a date range filter function.
- * Parses start/end dates once for performance.
- */
 const createDateRangeFilter = (startDateStr?: string, endDateStr?: string) => {
-  // Parse dates once, not for every row
   const startDate = startDateStr
     ? DateTime.fromFormat(startDateStr, "yyyy-MM-dd", { zone: "utc" }).startOf("day")
     : null;
-
   const endDate = endDateStr ? DateTime.fromFormat(endDateStr, "yyyy-MM-dd", { zone: "utc" }).endOf("day") : null;
 
-  // Validate parsed dates
   if (startDate && !startDate.isValid) {
     throw new Error(`Invalid start date: ${startDateStr}`);
   }
+
   if (endDate && !endDate.isValid) {
     throw new Error(`Invalid end date: ${endDateStr}`);
   }
 
-  // Return fast filter function
-  return (dateStr: string): boolean => {
+  return (dateStr: string) => {
     const createdAt = DateTime.fromFormat(dateStr, "yyyy-MM-dd HH:mm:ss", { zone: "utc" });
     if (!createdAt.isValid) {
       return false;
@@ -95,14 +88,12 @@ export async function registerCsvParseWorker() {
       const quotaTracker = await ImportQuotaTracker.create(organization);
 
       const chunkSize = 5000;
-      const MAX_ROWS = 10_000_000; // 10 million rows max
-      const PROCESSING_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes max
+      const PROCESSING_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes max
 
       let chunk: UmamiEvent[] = [];
       let totalAccepted = 0;
       let totalSkippedQuota = 0;
       let totalSkippedDate = 0;
-      let totalRowsProcessed = 0;
       let chunksSent = 0;
 
       stream = isR2Storage
@@ -127,13 +118,6 @@ export async function registerCsvParseWorker() {
       const isDateInRange = createDateRangeFilter(startDate, endDate);
 
       for await (const data of stream) {
-        totalRowsProcessed++;
-
-        // Enforce row count limit to prevent memory exhaustion
-        if (totalRowsProcessed > MAX_ROWS) {
-          throw new Error(`Import exceeds maximum row limit of ${MAX_ROWS.toLocaleString()}`);
-        }
-
         // Skip rows with missing or invalid dates
         if (!data.created_at) {
           continue;
