@@ -43,12 +43,10 @@ export default async function OSSFriendsPage() {
       <div className="max-w-[1300px] mx-auto px-6 py-20">
         {/* Header */}
         <div className="text-center mb-16">
-          <h1 className="text-4xl md:text-5xl font-bold text-white mb-4">
-            OSS Friends
-          </h1>
+          <h1 className="text-4xl md:text-5xl font-bold text-white mb-4">OSS Friends</h1>
           <p className="text-lg text-neutral-400 max-w-2xl mx-auto">
-            We're proud to be part of the open source community. Here are some
-            amazing open source projects we love and support.
+            We're proud to be part of the open source community. Here are some amazing open source projects we love and
+            support.
           </p>
         </div>
 
@@ -56,12 +54,10 @@ export default async function OSSFriendsPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {friends.length === 0 ? (
             <div className="col-span-full text-center py-12">
-              <p className="text-neutral-400">
-                No OSS friends found. Check back later!
-              </p>
+              <p className="text-neutral-400">No OSS friends found. Check back later!</p>
             </div>
           ) : (
-            friends.map((friend) => (
+            friends.map(friend => (
               <Link
                 key={friend.href}
                 href={friend.href}
@@ -84,18 +80,11 @@ export default async function OSSFriendsPage() {
                     <h3 className="text-lg font-semibold text-white mb-2 group-hover:text-blue-400 transition-colors">
                       {friend.name}
                     </h3>
-                    <p className="text-sm text-neutral-400 line-clamp-3">
-                      {friend.description}
-                    </p>
+                    <p className="text-sm text-neutral-400 line-clamp-3">{friend.description}</p>
                   </div>
                 </div>
                 <div className="absolute top-4 right-4 text-neutral-600 group-hover:text-neutral-400 transition-colors">
-                  <svg
-                    className="h-5 w-5"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
+                  <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path
                       strokeLinecap="round"
                       strokeLinejoin="round"
@@ -108,41 +97,6 @@ export default async function OSSFriendsPage() {
             ))
           )}
         </div>
-
-        {/* CTA Section */}
-        <div className="mt-16 text-center">
-          <div className="inline-block rounded-lg border border-neutral-800 bg-neutral-900/50 p-8 max-w-2xl">
-            <h2 className="text-2xl font-bold text-white mb-4">
-              Want to join our OSS Friends?
-            </h2>
-            <p className="text-neutral-400 mb-6">
-              If you have an open source project with at least 200 stars on
-              GitHub, you can create your own /oss-friends page and link to it
-              from your footer or website to be discoverable by Google.
-            </p>
-            <a
-              href="https://formbricks.com/oss-friends"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-blue-700"
-            >
-              Learn More
-              <svg
-                className="h-4 w-4"
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
-                />
-              </svg>
-            </a>
-          </div>
-        </div>
       </div>
     </div>
   );
@@ -150,6 +104,5 @@ export default async function OSSFriendsPage() {
 
 export const metadata = {
   title: "OSS Friends | Rybbit",
-  description:
-    "Open source projects we love and support. Join our OSS Friends community.",
+  description: "Open source projects we love and support. Join our OSS Friends community.",
 };
