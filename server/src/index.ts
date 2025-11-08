@@ -76,7 +76,6 @@ import { trackEvent } from "./services/tracker/trackEvent.js";
 // need to import telemetry service here to start it
 import { telemetryService } from "./services/telemetryService.js";
 import { weeklyReportService } from "./services/weekyReports/weeklyReportService.js";
-import { importCleanupService } from "./services/import/importCleanupService.js";
 import { extractSiteId } from "./utils.js";
 import { getTrackingConfig } from "./api/sites/getTrackingConfig.js";
 import { updateSitePrivateLinkConfig } from "./api/sites/updateSitePrivateLinkConfig.js";
@@ -481,11 +480,6 @@ const start = async () => {
       server.log.error("Failed to initialize import job queue system:", queueError);
       server.log.warn("Server will continue without import functionality");
       // Don't exit - allow server to run without import features
-    }
-
-    // Initialize import cleanup service (runs daily to clean up old import files)
-    if (IS_CLOUD) {
-      importCleanupService.initializeCleanupCron();
     }
 
     // Start the server first

@@ -215,7 +215,6 @@ export async function createCsvParseWorker(jobQueue: IJobQueue) {
       } catch (deleteError) {
         logger.warn({ importId, error: deleteError }, "File cleanup failed, will remain in storage");
         // File will be orphaned but import status is already recorded
-        // importCleanupService.ts handles orphans
       }
     }
   });
