@@ -205,7 +205,7 @@ export class CSVWorkerManager {
       // Mark as completed
       this.completedUploads.add(chunkIndex);
       this.progress.uploadedBatches++;
-      this.progress.importedEvents += data.importedCount || events.length;
+      this.progress.importedEvents += data.importedCount ?? events.length;
 
       this.activeUploads--;
       this.notifyProgress();

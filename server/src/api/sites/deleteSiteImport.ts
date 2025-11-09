@@ -49,19 +49,6 @@ export async function deleteSiteImport(request: FastifyRequest<DeleteImportReque
 
     const siteId = Number(site);
 
-    // Delete the import record from the database FIRST (fail fast)
-    // If this fails, we haven't deleted any data yet
-    try {
-      await deleteImport(importId);
-    } catch (dbError) {
-      console.error(`Failed to delete import record ${importId}:`, dbError);
-      return reply.status(500).send({
-        error: "Failed to delete import record",
-      });
-    }
-
-    // Delete events from ClickHouse that were imported with this importId
-    // This is a critical operation - if it fails, we fail the entire deletion
     try {
       await clickhouse.command({
         query: `DELETE FROM events WHERE import_id = {importId:String} AND site_id = {siteId:UInt16}`,
@@ -74,7 +61,16 @@ export async function deleteSiteImport(request: FastifyRequest<DeleteImportReque
     } catch (chError) {
       console.error(`Failed to delete ClickHouse events for ${importId}:`, chError);
       return reply.status(500).send({
-        error: "Failed to delete imported events from database",
+        error: "Failed to delete imported events",
+      });
+    }
+
+    try {
+      await deleteImport(importId);
+    } catch (dbError) {
+      console.error(`Failed to delete import record ${importId}:`, dbError);
+      return reply.status(500).send({
+        error: "Failed to delete import record",
       });
     }
 

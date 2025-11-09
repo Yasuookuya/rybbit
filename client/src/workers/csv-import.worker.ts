@@ -187,7 +187,6 @@ function parseCSV(file: File) {
 
   Papa.parse<UmamiEvent>(file, {
     header: true,
-    dynamicTyping: true, // Auto-convert strings to numbers/booleans
     skipEmptyLines: "greedy", // Skip all empty lines (improved)
     delimiter: "", // Auto-detect delimiter (comma, tab, semicolon, etc.)
     transformHeader: (header, index) => {
