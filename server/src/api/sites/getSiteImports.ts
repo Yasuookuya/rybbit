@@ -36,14 +36,13 @@ export async function getSiteImports(request: FastifyRequest<GetSiteImportsReque
     const imports = await getImportsForSite(siteId);
 
     return reply.send({
-      data: imports.map(({ importId, platform, status, importedEvents, errorMessage, startedAt, fileName }) => ({
+      data: imports.map(({ importId, platform, status, importedEvents, errorMessage, startedAt }) => ({
         importId,
         platform,
         status,
         importedEvents,
         errorMessage,
         startedAt,
-        fileName,
       })),
     });
   } catch (error) {

@@ -44,8 +44,6 @@ const batchImportRequestSchema = z
     body: z.object({
       events: z.array(umamiEventSchema).min(1).max(10000), // Properly typed Umami events
       importId: z.string().uuid(),
-      batchIndex: z.number().int().min(0),
-      totalBatches: z.number().int().min(1),
     }),
   })
   .strict();
@@ -68,7 +66,7 @@ export async function batchImportEvents(request: FastifyRequest<BatchImportReque
     }
 
     const { site } = parsed.data.params;
-    const { events, importId, batchIndex, totalBatches } = parsed.data.body;
+    const { events, importId } = parsed.data.body;
     const siteId = Number(site);
 
     const userHasAccess = await getUserHasAdminAccessToSite(request, site);
@@ -151,19 +149,14 @@ export async function batchImportEvents(request: FastifyRequest<BatchImportReque
         }
       }
 
-      // If all events were skipped due to quota, fail the batch
+      // If all events were skipped due to quota, log warning
       if (eventsWithinQuota.length === 0 && events.length > 0) {
         const quotaSummary = quotaTracker.getSummary();
         const errorMessage =
-          `All ${events.length} events in batch ${batchIndex} exceeded monthly quotas or fell outside the ${quotaSummary.totalMonthsInWindow}-month historical window. ` +
+          `All ${events.length} events exceeded monthly quotas or fell outside the ${quotaSummary.totalMonthsInWindow}-month historical window. ` +
           `${quotaSummary.monthsAtCapacity} of ${quotaSummary.totalMonthsInWindow} months are at full capacity.`;
 
-        logger.warn({ importId, batchIndex, skippedDueToQuota }, errorMessage);
-
-        // Update import status to failed if this was the only batch or early in the import
-        if (batchIndex === 0 || totalBatches === 1) {
-          await updateImportStatus(importId, "failed", errorMessage);
-        }
+        logger.warn({ importId, skippedDueToQuota }, errorMessage);
 
         return reply.status(400).send({
           success: false,
@@ -176,11 +169,11 @@ export async function batchImportEvents(request: FastifyRequest<BatchImportReque
       const transformedEvents = UmamiImportMapper.transform(eventsWithinQuota, site, importId);
 
       if (transformedEvents.length === 0) {
-        logger.warn({ importId, batchIndex }, "No valid events after transformation");
+        logger.warn({ importId }, "No valid events after transformation");
         return reply.send({
           success: true,
           importedCount: 0,
-          message: `Batch ${batchIndex + 1}/${totalBatches}: No valid events`,
+          message: "No valid events in batch",
         });
       }
 
@@ -194,10 +187,8 @@ export async function batchImportEvents(request: FastifyRequest<BatchImportReque
       logger.info(
         {
           importId,
-          batchIndex,
           eventCount: transformedEvents.length,
           skippedDueToQuota,
-          totalBatches,
         },
         "Batch inserted successfully"
       );
@@ -208,13 +199,11 @@ export async function batchImportEvents(request: FastifyRequest<BatchImportReque
       return reply.send({
         success: true,
         importedCount: transformedEvents.length,
-        message: `Batch ${batchIndex + 1}/${totalBatches} imported successfully${skippedDueToQuota > 0 ? ` (${skippedDueToQuota} events skipped due to quota)` : ""}`,
+        message: `Imported ${transformedEvents.length} events${skippedDueToQuota > 0 ? ` (${skippedDueToQuota} skipped due to quota)` : ""}`,
       });
     } catch (insertError) {
-      logger.error({ importId, batchIndex, error: insertError }, "Failed to insert batch");
+      logger.error({ importId, error: insertError }, "Failed to insert batch");
 
-      // Don't mark entire import as failed for individual batch failures
-      // The client will retry and handle failures
       return reply.status(500).send({
         success: false,
         error: "Failed to insert events",

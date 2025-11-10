@@ -38,10 +38,8 @@ export type WorkerMessageToWorker =
       file: File;
       siteId: number;
       importId: string;
-      earliestAllowedDate: string; // Filter events before this date (yyyy-MM-dd)
-      latestAllowedDate: string; // Filter events after this date (yyyy-MM-dd)
-      startDate?: string; // Optional user-specified start date filter
-      endDate?: string; // Optional user-specified end date filter
+      earliestAllowedDate: string; // Filter events before this date (quota-based, yyyy-MM-dd)
+      latestAllowedDate: string; // Filter events after this date (quota-based, yyyy-MM-dd)
     }
   | {
       type: "CANCEL";
@@ -57,7 +55,6 @@ export type WorkerMessageToMain =
   | {
       type: "CHUNK_READY";
       events: UmamiEvent[]; // Raw CSV rows, not transformed
-      chunkIndex: number;
     }
   | {
       type: "COMPLETE";
@@ -76,8 +73,6 @@ export type WorkerMessageToMain =
 export interface BatchImportRequest {
   events: UmamiEvent[]; // Raw Umami CSV rows
   importId: string;
-  batchIndex: number;
-  totalBatches: number;
 }
 
 // Batch import response
@@ -94,17 +89,6 @@ export interface ImportProgress {
   totalRows: number;
   parsedRows: number;
   skippedRows: number;
-  uploadedBatches: number;
-  totalBatches: number;
-  failedBatches: number;
   importedEvents: number;
-  errors: Array<{ batch?: number; message: string }>;
-}
-
-// Failed batch info for retry
-export interface FailedBatch {
-  batchIndex: number;
-  events: UmamiEvent[]; // Raw rows, not transformed
-  error: string;
-  retryCount: number;
+  errors: Array<{ message: string }>;
 }

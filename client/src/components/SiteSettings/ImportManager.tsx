@@ -1,14 +1,13 @@
 "use client";
 
 import { useMemo, useState, useRef, useEffect } from "react";
-import { useForm, Controller } from "react-hook-form";
+import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { DateTime } from "luxon";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import {
   AlertDialog,
@@ -23,10 +22,8 @@ import {
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Separator } from "@/components/ui/separator";
 import { Upload, FileText, AlertCircle, CheckCircle2, Clock, Loader2, Trash2, Info } from "lucide-react";
 import { useGetSiteImports, useCreateSiteImport, useDeleteSiteImport } from "@/api/admin/import";
-import { SplitDateRangePicker } from "@/components/SplitDateRangePicker";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { IS_CLOUD } from "@/lib/const";
 import { CSVWorkerManager } from "@/lib/import/csv-worker-manager";
@@ -63,34 +60,6 @@ const importFormSchema = z.object({
       const file = files[0];
       return file && file.name.length <= 255;
     }, "Filename is too long"),
-  dateRange: z
-    .object({
-      startDate: z.custom<DateTime>().optional(),
-      endDate: z.custom<DateTime>().optional(),
-    })
-    .refine(
-      data => {
-        if (!data.startDate || !data.endDate) return true;
-        return data.startDate <= data.endDate;
-      },
-      { message: "Start date must be before or equal to end date" }
-    )
-    .refine(
-      data => {
-        if (!data.startDate) return true;
-        const today = DateTime.utc().startOf("day");
-        return data.startDate <= today;
-      },
-      { message: "Start date cannot be in the future" }
-    )
-    .refine(
-      data => {
-        if (!data.endDate) return true;
-        const today = DateTime.utc().startOf("day");
-        return data.endDate <= today;
-      },
-      { message: "End date cannot be in the future" }
-    ),
 });
 
 type ImportFormData = z.infer<typeof importFormSchema>;
@@ -120,7 +89,6 @@ export function ImportManager({ siteId, disabled }: ImportManagerProps) {
   const deleteMutation = useDeleteSiteImport(siteId);
 
   const {
-    control,
     register,
     handleSubmit,
     watch,
@@ -131,7 +99,6 @@ export function ImportManager({ siteId, disabled }: ImportManagerProps) {
     mode: "onChange",
     defaultValues: {
       file: Object.assign(new DataTransfer().files, {}),
-      dateRange: {},
     },
   });
 
@@ -161,9 +128,6 @@ export function ImportManager({ siteId, disabled }: ImportManagerProps) {
     const file = data.file[0];
     if (!file) return;
 
-    const startDate = data.dateRange.startDate?.toFormat("yyyy-MM-dd");
-    const endDate = data.dateRange.endDate?.toFormat("yyyy-MM-dd");
-
     // Step 1: Create import record and get allowed date range
     createImportMutation.mutate(undefined, {
       onSuccess: response => {
@@ -189,9 +153,7 @@ export function ImportManager({ siteId, disabled }: ImportManagerProps) {
           siteId,
           importId,
           allowedDateRange.earliestAllowedDate,
-          allowedDateRange.latestAllowedDate,
-          startDate,
-          endDate
+          allowedDateRange.latestAllowedDate
         );
 
         // Reset form
@@ -303,28 +265,6 @@ export function ImportManager({ siteId, disabled }: ImportManagerProps) {
           )}
 
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-            {/* Date Range Picker */}
-            <Controller
-              name="dateRange"
-              control={control}
-              render={({ field }) => (
-                <div className="space-y-2">
-                  <SplitDateRangePicker
-                    value={field.value}
-                    onChange={field.onChange}
-                    label="Date Range (Optional)"
-                    disabled={disabled || createImportMutation.isPending || hasActiveImport}
-                    showDescription={true}
-                    clearButtonText="Clear dates"
-                    className="space-y-2"
-                  />
-                  {errors.dateRange?.message && <p className="text-sm text-red-600">{errors.dateRange.message}</p>}
-                </div>
-              )}
-            />
-
-            <Separator />
-
             {/* File Upload */}
             <div className="space-y-2">
               <Label htmlFor="file" className="flex items-center gap-2">
@@ -568,7 +508,7 @@ export function ImportManager({ siteId, disabled }: ImportManagerProps) {
 
           <div className="space-y-4">
             {/* Progress Stats */}
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-3 gap-4">
               <div>
                 <p className="text-sm text-muted-foreground">Parsed Rows</p>
                 <p className="text-2xl font-bold">{importProgress?.parsedRows.toLocaleString()}</p>
@@ -578,28 +518,10 @@ export function ImportManager({ siteId, disabled }: ImportManagerProps) {
                 <p className="text-2xl font-bold">{importProgress?.skippedRows.toLocaleString()}</p>
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">Uploaded Batches</p>
-                <p className="text-2xl font-bold">
-                  {importProgress?.uploadedBatches} / {importProgress?.totalBatches}
-                </p>
-              </div>
-              <div>
                 <p className="text-sm text-muted-foreground">Imported Events</p>
                 <p className="text-2xl font-bold">{importProgress?.importedEvents.toLocaleString()}</p>
               </div>
             </div>
-
-            {/* Progress Bar */}
-            {importProgress && importProgress.totalBatches > 0 && (
-              <div className="w-full bg-gray-200 rounded-full h-2.5">
-                <div
-                  className="bg-blue-600 h-2.5 rounded-full transition-all"
-                  style={{
-                    width: `${(importProgress.uploadedBatches / importProgress.totalBatches) * 100}%`,
-                  }}
-                />
-              </div>
-            )}
 
             {/* Errors */}
             {importProgress && importProgress.errors.length > 0 && (
@@ -607,7 +529,6 @@ export function ImportManager({ siteId, disabled }: ImportManagerProps) {
                 <p className="text-sm font-medium text-red-600 mb-2">Errors ({importProgress.errors.length}):</p>
                 {importProgress.errors.slice(0, 10).map((error, idx) => (
                   <p key={idx} className="text-xs text-red-600">
-                    {error.batch !== undefined ? `Batch ${error.batch}: ` : ""}
                     {error.message}
                   </p>
                 ))}

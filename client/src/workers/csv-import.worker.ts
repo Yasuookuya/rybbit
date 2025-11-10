@@ -10,7 +10,6 @@ const CHUNK_SIZE = 5000; // Number of rows per batch sent to main thread
 const PROGRESS_UPDATE_INTERVAL = 1000; // Update progress every 1000 rows
 
 let currentBatch: UmamiEvent[] = [];
-let chunkIndex = 0;
 let totalParsed = 0;
 let totalSkipped = 0;
 let totalErrors = 0;
@@ -18,12 +17,9 @@ let errorDetails: Array<{ row: number; message: string }> = [];
 let lastProgressUpdate = 0;
 
 // Date range filters (client-side optimization to reduce server load)
-// Quota-enforced dates (required based on subscription tier)
+// Quota-enforced dates (based on subscription tier)
 let earliestAllowedDate: DateTime | null = null;
 let latestAllowedDate: DateTime | null = null;
-// User-specified optional date filters
-let userStartDate: DateTime | null = null;
-let userEndDate: DateTime | null = null;
 
 // Umami CSV header mapping
 const umamiHeaders = [
@@ -65,13 +61,8 @@ const umamiHeaders = [
   undefined,
 ];
 
-function createDateRangeFilter(
-  earliestAllowedDateStr: string,
-  latestAllowedDateStr: string,
-  userStartDateStr?: string,
-  userEndDateStr?: string
-) {
-  // Parse quota-enforced dates (required)
+function createDateRangeFilter(earliestAllowedDateStr: string, latestAllowedDateStr: string) {
+  // Parse quota-enforced dates
   earliestAllowedDate = DateTime.fromFormat(earliestAllowedDateStr, "yyyy-MM-dd", { zone: "utc" }).startOf("day");
   latestAllowedDate = DateTime.fromFormat(latestAllowedDateStr, "yyyy-MM-dd", { zone: "utc" }).endOf("day");
 
@@ -82,22 +73,6 @@ function createDateRangeFilter(
   if (!latestAllowedDate.isValid) {
     throw new Error(`Invalid latest allowed date: ${latestAllowedDateStr}`);
   }
-
-  // Parse user-specified optional dates
-  userStartDate = userStartDateStr
-    ? DateTime.fromFormat(userStartDateStr, "yyyy-MM-dd", { zone: "utc" }).startOf("day")
-    : null;
-  userEndDate = userEndDateStr
-    ? DateTime.fromFormat(userEndDateStr, "yyyy-MM-dd", { zone: "utc" }).endOf("day")
-    : null;
-
-  if (userStartDate && !userStartDate.isValid) {
-    throw new Error(`Invalid user start date: ${userStartDateStr}`);
-  }
-
-  if (userEndDate && !userEndDate.isValid) {
-    throw new Error(`Invalid user end date: ${userEndDateStr}`);
-  }
 }
 
 function isDateInRange(dateStr: string): boolean {
@@ -106,21 +81,12 @@ function isDateInRange(dateStr: string): boolean {
     return false;
   }
 
-  // Check quota-enforced dates (required)
+  // Check quota-enforced dates
   if (earliestAllowedDate && createdAt < earliestAllowedDate) {
     return false;
   }
 
   if (latestAllowedDate && createdAt > latestAllowedDate) {
-    return false;
-  }
-
-  // Check user-specified optional dates
-  if (userStartDate && createdAt < userStartDate) {
-    return false;
-  }
-
-  if (userEndDate && createdAt > userEndDate) {
     return false;
   }
 
@@ -132,10 +98,8 @@ function sendChunk() {
     const message: WorkerMessageToMain = {
       type: "CHUNK_READY",
       events: currentBatch,
-      chunkIndex,
     };
     self.postMessage(message);
-    chunkIndex++;
     currentBatch = [];
   }
 }
@@ -184,8 +148,8 @@ function handleParsedRow(row: unknown, rowIndex: number) {
     return;
   }
 
-  // Apply date range filter (quota-enforced + optional user filters)
-  // This client-side filtering reduces network traffic and server processing
+  // Apply quota-based date range filter
+  // This client-side filtering reduces network traffic
   if (!isDateInRange(umamiEvent.created_at)) {
     totalSkipped++;
     return;
@@ -270,20 +234,14 @@ self.onmessage = (event: MessageEvent<WorkerMessageToWorker>) => {
     case "PARSE_START":
       // Reset state
       currentBatch = [];
-      chunkIndex = 0;
       totalParsed = 0;
       totalSkipped = 0;
       totalErrors = 0;
       errorDetails = [];
       lastProgressUpdate = 0;
 
-      // Set up date range filters (quota-enforced + optional user filters)
-      createDateRangeFilter(
-        message.earliestAllowedDate,
-        message.latestAllowedDate,
-        message.startDate,
-        message.endDate
-      );
+      // Set up quota-based date range filter
+      createDateRangeFilter(message.earliestAllowedDate, message.latestAllowedDate);
 
       // Start parsing
       parseCSV(message.file);

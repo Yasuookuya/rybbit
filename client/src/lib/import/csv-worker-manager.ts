@@ -1,12 +1,8 @@
 // Worker manager for coordinating CSV import process
-// Manages worker lifecycle, batch uploads, and error handling
+// Manages worker lifecycle and sequential batch uploads
 // Server handles transformation and quota checking
 
-import type { WorkerMessageToWorker, WorkerMessageToMain, ImportProgress, FailedBatch, UmamiEvent } from "./types";
-
-const MAX_CONCURRENT_UPLOADS = 3; // Maximum number of parallel batch uploads
-const RETRY_ATTEMPTS = 3; // Number of retry attempts for failed batches
-const RETRY_DELAY_MS = 1000; // Initial delay between retries (exponential backoff)
+import type { WorkerMessageToWorker, WorkerMessageToMain, ImportProgress, UmamiEvent } from "./types";
 
 type ProgressCallback = (progress: ImportProgress) => void;
 type CompleteCallback = (success: boolean, message: string) => void;
@@ -18,18 +14,12 @@ export class CSVWorkerManager {
     totalRows: 0,
     parsedRows: 0,
     skippedRows: 0,
-    uploadedBatches: 0,
-    totalBatches: 0,
-    failedBatches: 0,
     importedEvents: 0,
     errors: [],
   };
   private onProgress: ProgressCallback | null = null;
   private onComplete: CompleteCallback | null = null;
-  private uploadQueue: Array<{ events: UmamiEvent[]; chunkIndex: number }> = [];
-  private activeUploads = 0;
-  private completedUploads = new Set<number>();
-  private failedBatches: FailedBatch[] = [];
+  private uploadInProgress = false;
   private parsingComplete = false;
   private siteId: number = 0;
   private importId: string = "";
@@ -44,26 +34,18 @@ export class CSVWorkerManager {
     siteId: number,
     importId: string,
     earliestAllowedDate: string,
-    latestAllowedDate: string,
-    startDate?: string,
-    endDate?: string
+    latestAllowedDate: string
   ): void {
     this.siteId = siteId;
     this.importId = importId;
     this.parsingComplete = false;
-    this.uploadQueue = [];
-    this.activeUploads = 0;
-    this.completedUploads.clear();
-    this.failedBatches = [];
+    this.uploadInProgress = false;
 
     this.progress = {
       status: "parsing",
       totalRows: 0,
       parsedRows: 0,
       skippedRows: 0,
-      uploadedBatches: 0,
-      totalBatches: 0,
-      failedBatches: 0,
       importedEvents: 0,
       errors: [],
     };
@@ -90,7 +72,7 @@ export class CSVWorkerManager {
       }
     };
 
-    // Start parsing with allowed date range for client-side filtering
+    // Start parsing with quota-based date range for client-side filtering
     const message: WorkerMessageToWorker = {
       type: "PARSE_START",
       file,
@@ -98,8 +80,6 @@ export class CSVWorkerManager {
       importId,
       earliestAllowedDate,
       latestAllowedDate,
-      startDate,
-      endDate,
     };
 
     this.worker.postMessage(message);
@@ -119,17 +99,10 @@ export class CSVWorkerManager {
         break;
 
       case "CHUNK_READY":
-        // Add to upload queue
-        this.uploadQueue.push({
-          events: message.events,
-          chunkIndex: message.chunkIndex,
-        });
-        this.progress.totalBatches++;
+        // Upload batch immediately (sequential)
         this.progress.status = "uploading";
         this.notifyProgress();
-
-        // Process upload queue
-        this.processUploadQueue();
+        this.uploadBatch(message.events);
         break;
 
       case "COMPLETE":
@@ -146,7 +119,7 @@ export class CSVWorkerManager {
 
         this.notifyProgress();
 
-        // Check if all uploads are complete
+        // Check if upload is complete
         this.checkCompletion();
         break;
 
@@ -166,18 +139,9 @@ export class CSVWorkerManager {
     }
   }
 
-  private async processUploadQueue(): Promise<void> {
-    // Process queued uploads with concurrency limit
-    while (this.uploadQueue.length > 0 && this.activeUploads < MAX_CONCURRENT_UPLOADS) {
-      const batch = this.uploadQueue.shift();
-      if (!batch) continue;
+  private async uploadBatch(events: UmamiEvent[]): Promise<void> {
+    this.uploadInProgress = true;
 
-      this.activeUploads++;
-      this.uploadBatch(batch.events, batch.chunkIndex);
-    }
-  }
-
-  private async uploadBatch(events: UmamiEvent[], chunkIndex: number, retryCount = 0): Promise<void> {
     try {
       const response = await fetch(`/api/batch-import-events/${this.siteId}`, {
         method: "POST",
@@ -188,8 +152,6 @@ export class CSVWorkerManager {
         body: JSON.stringify({
           events,
           importId: this.importId,
-          batchIndex: chunkIndex,
-          totalBatches: this.progress.totalBatches,
         }),
       });
 
@@ -199,77 +161,36 @@ export class CSVWorkerManager {
       }
 
       const data = await response.json();
-
-      // Mark as completed
-      this.completedUploads.add(chunkIndex);
-      this.progress.uploadedBatches++;
       this.progress.importedEvents += data.importedCount ?? events.length;
-
-      this.activeUploads--;
+      this.notifyProgress();
+    } catch (error) {
+      // Fail fast - no retries
+      this.progress.status = "failed";
+      this.progress.errors.push({
+        message: `Upload failed: ${error instanceof Error ? error.message : "Unknown error"}`,
+      });
       this.notifyProgress();
 
-      // Continue processing queue
-      this.processUploadQueue();
-
-      // Check if we're done
-      this.checkCompletion();
-    } catch (error) {
-      console.error(`Failed to upload batch ${chunkIndex}:`, error);
-
-      // Retry with exponential backoff
-      if (retryCount < RETRY_ATTEMPTS) {
-        const delay = RETRY_DELAY_MS * Math.pow(2, retryCount);
-        console.log(`Retrying batch ${chunkIndex} in ${delay}ms (attempt ${retryCount + 1}/${RETRY_ATTEMPTS})`);
-
-        setTimeout(() => {
-          this.uploadBatch(events, chunkIndex, retryCount + 1);
-        }, delay);
-      } else {
-        // Max retries exceeded, record as failed
-        this.failedBatches.push({
-          batchIndex: chunkIndex,
-          events,
-          error: error instanceof Error ? error.message : "Unknown error",
-          retryCount,
-        });
-
-        this.progress.failedBatches++;
-        this.progress.errors.push({
-          batch: chunkIndex,
-          message: `Batch ${chunkIndex} failed after ${RETRY_ATTEMPTS} attempts: ${error instanceof Error ? error.message : "Unknown error"}`,
-        });
-
-        this.activeUploads--;
-        this.notifyProgress();
-
-        // Continue processing other batches
-        this.processUploadQueue();
-        this.checkCompletion();
+      if (this.onComplete) {
+        this.onComplete(false, `Upload failed: ${error instanceof Error ? error.message : "Unknown error"}`);
       }
+
+      this.terminate();
+      return;
+    } finally {
+      this.uploadInProgress = false;
     }
+
+    // Check if we're done
+    this.checkCompletion();
   }
 
   private checkCompletion(): void {
-    if (this.parsingComplete && this.activeUploads === 0 && this.uploadQueue.length === 0) {
-      const totalExpectedBatches = this.progress.totalBatches;
-      const successfulBatches = this.progress.uploadedBatches;
-      const failedCount = this.progress.failedBatches;
-
-      if (failedCount === 0) {
-        this.progress.status = "completed";
-        this.notifyProgress();
-        if (this.onComplete) {
-          this.onComplete(true, `Import completed successfully: ${this.progress.importedEvents} events imported`);
-        }
-      } else {
-        this.progress.status = "completed";
-        this.notifyProgress();
-        if (this.onComplete) {
-          this.onComplete(
-            false,
-            `Import completed with errors: ${successfulBatches}/${totalExpectedBatches} batches succeeded, ${failedCount} batches failed`
-          );
-        }
+    if (this.parsingComplete && !this.uploadInProgress) {
+      this.progress.status = "completed";
+      this.notifyProgress();
+      if (this.onComplete) {
+        this.onComplete(true, `Import completed successfully: ${this.progress.importedEvents} events imported`);
       }
 
       // Clean up worker
@@ -285,10 +206,6 @@ export class CSVWorkerManager {
 
   getProgress(): ImportProgress {
     return { ...this.progress };
-  }
-
-  getFailedBatches(): FailedBatch[] {
-    return [...this.failedBatches];
   }
 
   terminate(): void {
