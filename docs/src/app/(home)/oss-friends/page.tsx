@@ -39,12 +39,12 @@ export default async function OSSFriendsPage() {
   const friends = await getOSSFriends();
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-neutral-950 to-neutral-900">
+    <div className="min-h-screen bg-gradient-to-b from-neutral-50 to-neutral-100 dark:from-neutral-950 dark:to-neutral-900">
       <div className="max-w-[1300px] mx-auto px-6 py-20">
         {/* Header */}
         <div className="text-center mb-16">
-          <h1 className="text-4xl md:text-5xl font-bold text-white mb-4">OSS Friends</h1>
-          <p className="text-lg text-neutral-400 max-w-2xl mx-auto">
+          <h1 className="text-4xl md:text-5xl font-bold text-neutral-900 dark:text-white mb-4">OSS Friends</h1>
+          <p className="text-lg text-neutral-600 dark:text-neutral-400 max-w-2xl mx-auto">
             We're proud to be part of the open source community. Here are some amazing open source projects we love and
             support.
           </p>
@@ -54,7 +54,7 @@ export default async function OSSFriendsPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {friends.length === 0 ? (
             <div className="col-span-full text-center py-12">
-              <p className="text-neutral-400">No OSS friends found. Check back later!</p>
+              <p className="text-neutral-600 dark:text-neutral-400">No OSS friends found. Check back later!</p>
             </div>
           ) : (
             friends.map(friend => (
@@ -63,7 +63,7 @@ export default async function OSSFriendsPage() {
                 href={friend.href}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="group relative overflow-hidden rounded-lg border border-neutral-800 bg-neutral-900/50 p-6 transition-all hover:border-neutral-600 hover:bg-neutral-900"
+                className="group relative overflow-hidden rounded-lg border border-neutral-200 dark:border-neutral-800 bg-white/50 dark:bg-neutral-900/50 p-6 transition-all hover:border-neutral-300 dark:hover:border-neutral-600 hover:bg-white dark:hover:bg-neutral-900"
               >
                 <div className="flex items-start gap-4">
                   <div className="flex-shrink-0">
@@ -77,13 +77,13 @@ export default async function OSSFriendsPage() {
                     />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <h3 className="text-lg font-semibold text-white mb-2 group-hover:text-blue-400 transition-colors">
+                    <h3 className="text-lg font-semibold text-neutral-900 dark:text-white mb-2 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
                       {friend.name}
                     </h3>
-                    <p className="text-sm text-neutral-400 line-clamp-3">{friend.description}</p>
+                    <p className="text-sm text-neutral-600 dark:text-neutral-400 line-clamp-3">{friend.description}</p>
                   </div>
                 </div>
-                <div className="absolute top-4 right-4 text-neutral-600 group-hover:text-neutral-400 transition-colors">
+                <div className="absolute top-4 right-4 text-neutral-400 dark:text-neutral-600 group-hover:text-neutral-600 dark:group-hover:text-neutral-400 transition-colors">
                   <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path
                       strokeLinecap="round"

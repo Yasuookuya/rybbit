@@ -139,6 +139,11 @@ export function Footer() {
                 </Link>
               </li>
               <li>
+                <Link href="/tools" className="text-neutral-400 hover:text-white transition-colors">
+                  Tools
+                </Link>
+              </li>
+              <li>
                 <a
                   href="https://github.com/rybbit-io/rybbit"
                   target="_blank"
