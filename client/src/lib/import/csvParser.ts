@@ -63,7 +63,7 @@ export class CsvParser {
       header: true,
       skipEmptyLines: "greedy",
       worker: true,
-      chunkSize: 9 * 1024 * 1024,
+      chunkSize: 5 * 1024 * 1024, // 5MB CSV chunks to stay under 10MB JSON limit
       chunk: async (results, parser) => {
         if (this.cancelled) {
           parser.abort();
