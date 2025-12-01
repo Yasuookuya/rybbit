@@ -357,6 +357,12 @@ server.get("/api/session-replay/list/:site", getSessionReplays);
 server.get("/api/session-replay/:sessionId/:site", getSessionReplayEvents);
 server.delete("/api/session-replay/:sessionId/:site", deleteSessionReplay);
 
+// Imports
+// server.get("/api/get-site-imports/:site", getSiteImports);
+// server.post("/api/create-site-import/:site", createSiteImport);
+// server.post("/api/batch-import-events/:site/:importId", batchImportEvents);
+// server.delete("/api/delete-site-import/:site/:importId", deleteSiteImport);
+
 // Administrative
 server.get("/api/config", getConfig);
 server.post("/api/add-site", addSite);

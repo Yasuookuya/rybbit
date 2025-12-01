@@ -17,7 +17,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 import { SiteResponse, useGetSite } from "@/api/admin/sites";
-import { useUserOrganizations } from "../../api/admin/organizations";
+import { useUserOrganizations } from "@/api/admin/organizations";
 import { ScriptBuilder } from "./ScriptBuilder";
 import { SiteConfiguration } from "./SiteConfiguration";
 
@@ -60,11 +60,16 @@ function SiteSettingsInner({ siteMetadata, trigger }: { siteMetadata: SiteRespon
           <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="settings">Site Settings</TabsTrigger>
             <TabsTrigger value="script">Tracking Script</TabsTrigger>
+            {/* <TabsTrigger value="import">Import</TabsTrigger> */}
           </TabsList>
 
           <TabsContent value="script" className="pt-4 space-y-4 max-h-[70vh] overflow-y-auto">
             <ScriptBuilder siteId={siteMetadata.id ?? String(siteMetadata.siteId)} />
           </TabsContent>
+
+          {/* <TabsContent value="import" className="pt-4 space-y-4 max-h-[70vh] overflow-y-auto">
+            <ImportManager siteId={siteMetadata.siteId} disabled={disabled} />
+          </TabsContent> */}
 
           <TabsContent value="settings">
             <SiteConfiguration siteMetadata={siteMetadata} disabled={disabled} onClose={() => setDialogOpen(false)} />

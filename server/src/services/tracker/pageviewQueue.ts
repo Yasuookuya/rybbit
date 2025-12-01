@@ -99,6 +99,7 @@ class PageviewQueue {
         ttfb: pv.ttfb || null,
         ip: pv.storeIp ? pv.ipAddress : null,
         timezone: timezone,
+        import_id: null,
         company: dataForIp?.company?.name || "",
         company_domain: dataForIp?.company?.domain || "",
         company_type: dataForIp?.company?.type || "",

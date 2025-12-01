@@ -13,6 +13,8 @@ import {
   text,
   timestamp,
   unique,
+  pgEnum,
+  uuid,
 } from "drizzle-orm/pg-core";
 
 // User table (BetterAuth)
@@ -558,5 +560,36 @@ export const userAliases = pgTable(
     unique("user_aliases_site_anon_unique").on(table.siteId, table.anonymousId),
     index("user_aliases_user_idx").on(table.siteId, table.userId),
     index("user_aliases_anon_idx").on(table.siteId, table.anonymousId),
+  ]
+);
+
+export const importPlatforms = ["umami"] as const;
+
+export const importPlatformEnum = pgEnum("import_platform_enum", importPlatforms);
+
+export const importStatus = pgTable(
+  "import_status",
+  {
+    importId: uuid("import_id").primaryKey().notNull().defaultRandom(),
+    siteId: integer("site_id").notNull(),
+    organizationId: text("organization_id").notNull(),
+    platform: importPlatformEnum("platform").notNull(),
+    importedEvents: integer("imported_events").notNull().default(0),
+    skippedEvents: integer("skipped_events").notNull().default(0),
+    invalidEvents: integer("invalid_events").notNull().default(0),
+    startedAt: timestamp("started_at", { mode: "string" }).notNull().defaultNow(),
+    completedAt: timestamp("completed_at", { mode: "string" }),
+  },
+  table => [
+    foreignKey({
+      columns: [table.siteId],
+      foreignColumns: [sites.siteId],
+      name: "import_status_site_id_sites_site_id_fk",
+    }),
+    foreignKey({
+      columns: [table.organizationId],
+      foreignColumns: [organization.id],
+      name: "import_status_organization_id_organization_id_fk",
+    }),
   ]
 );
