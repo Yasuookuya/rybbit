@@ -169,9 +169,11 @@ function SignupPageContent() {
       try {
         const normalizedDomain = normalizeDomain(domain);
         const response = await addSite(normalizedDomain, normalizedDomain, organizationId);
-        // Navigate directly to dashboard after adding website
-        // router.push(`/${response.siteId}`);
-        router.push("/subscribe?siteId=" + response.siteId);
+        if (IS_CLOUD) {
+          router.push("/subscribe?siteId=" + response.siteId);
+        } else {
+          router.push(`/${response.siteId}`);
+        }
       } catch (error) {
         setError(String(error));
       }
