@@ -1,16 +1,17 @@
 import { useMemo } from "react";
 import { AdminOrganizationData } from "@/api/admin/getAdminOrganizations";
+import { TierOption } from "./OrganizationFilters";
 
 interface FilterOptions {
   searchQuery: string;
   showZeroEvents: boolean;
-  showFreeUsers: boolean;
+  selectedTiers: TierOption[];
   showOnlyOverLimit: boolean;
 }
 
 export function useFilteredOrganizations(
   organizations: AdminOrganizationData[] | undefined,
-  { searchQuery, showZeroEvents, showFreeUsers, showOnlyOverLimit }: FilterOptions
+  { searchQuery, showZeroEvents, selectedTiers, showOnlyOverLimit }: FilterOptions
 ) {
   return useMemo(() => {
     if (!organizations) return [];
@@ -38,9 +39,10 @@ export function useFilteredOrganizations(
       filtered = filtered.filter(org => org.sites.some(site => site.eventsLast30Days > 0));
     }
 
-    // Filter out free users
-    if (!showFreeUsers) {
-      filtered = filtered.filter(org => org.subscription.planName !== "free");
+    // Filter by selected subscription tiers (if any selected)
+    if (selectedTiers.length > 0) {
+      const tierValues = selectedTiers.map(t => t.value);
+      filtered = filtered.filter(org => tierValues.includes(org.subscription.planName));
     }
 
     // Show only organizations over their event limit
@@ -49,5 +51,5 @@ export function useFilteredOrganizations(
     }
 
     return filtered;
-  }, [organizations, searchQuery, showZeroEvents, showFreeUsers, showOnlyOverLimit]);
+  }, [organizations, searchQuery, showZeroEvents, selectedTiers, showOnlyOverLimit]);
 }

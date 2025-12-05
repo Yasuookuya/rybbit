@@ -2,7 +2,6 @@
 
 import { useState, useMemo } from "react";
 import { useAdminOrganizations } from "@/api/admin/getAdminOrganizations";
-import { Building2, CreditCard, Activity, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DateTime } from "luxon";
@@ -10,12 +9,11 @@ import { SearchInput } from "../shared/SearchInput";
 import { ErrorAlert } from "../shared/ErrorAlert";
 import { AdminLayout } from "../shared/AdminLayout";
 import { GrowthChart } from "../shared/GrowthChart";
-import { OverviewCards } from "../shared/OverviewCards";
 import { ServiceUsageChart } from "../shared/ServiceUsageChart";
 import { SubscriptionTiersTable } from "./SubscriptionTiersTable";
 import { OrganizationsTable } from "./OrganizationsTable";
-import { OrganizationFilters } from "./OrganizationFilters";
-import { useOrganizationStats } from "./useOrganizationStats";
+import { OrganizationFilters, TierOption } from "./OrganizationFilters";
+import { FilteredStatsCards } from "./FilteredStatsCards";
 import { useFilteredOrganizations } from "./useFilteredOrganizations";
 
 export function Organizations() {
@@ -25,11 +23,20 @@ export function Organizations() {
 
   // Filter states
   const [showZeroEvents, setShowZeroEvents] = useState(true);
-  const [showFreeUsers, setShowFreeUsers] = useState(true);
   const [showOnlyOverLimit, setShowOnlyOverLimit] = useState(false);
+  const [selectedTiers, setSelectedTiers] = useState<TierOption[]>([]);
 
   // Time period for service usage chart
   const [timePeriod, setTimePeriod] = useState<"30d" | "60d" | "120d" | "all">("30d");
+
+  // Calculate available tiers from organizations data
+  const availableTiers = useMemo(() => {
+    if (!organizations) return [];
+    const tiers = new Set(organizations.map(org => org.subscription.planName));
+    return Array.from(tiers)
+      .sort()
+      .map(tier => ({ value: tier, label: tier }));
+  }, [organizations]);
 
   // Calculate date range based on time period
   const { startDate, endDate } = useMemo(() => {
@@ -47,12 +54,10 @@ export function Organizations() {
     return { startDate: start, endDate: end };
   }, [timePeriod]);
 
-  const stats = useOrganizationStats(organizations);
-
   const filteredOrganizations = useFilteredOrganizations(organizations, {
     searchQuery,
     showZeroEvents,
-    showFreeUsers,
+    selectedTiers,
     showOnlyOverLimit,
   });
 
@@ -66,33 +71,6 @@ export function Organizations() {
 
   return (
     <AdminLayout>
-      <OverviewCards
-        isLoading={isLoading}
-        cards={[
-          {
-            title: "Total Organizations",
-            value: stats.totalOrganizations,
-            icon: Building2,
-          },
-          {
-            title: "Active Organizations",
-            value: stats.activeOrganizations,
-            icon: Activity,
-            description: "With events in past 30 days",
-          },
-          {
-            title: "Paid Organizations",
-            value: stats.paidOrganizations,
-            icon: CreditCard,
-          },
-          {
-            title: "Total Events (30d)",
-            value: stats.totalEventsLast30Days,
-            icon: Zap,
-          },
-        ]}
-      />
-
       <Tabs defaultValue="growth" className="mb-6">
         <div className="flex items-center justify-between mb-2">
           <TabsList>
@@ -161,11 +139,14 @@ export function Organizations() {
       <OrganizationFilters
         showZeroEvents={showZeroEvents}
         setShowZeroEvents={setShowZeroEvents}
-        showFreeUsers={showFreeUsers}
-        setShowFreeUsers={setShowFreeUsers}
         showOnlyOverLimit={showOnlyOverLimit}
         setShowOnlyOverLimit={setShowOnlyOverLimit}
+        availableTiers={availableTiers}
+        selectedTiers={selectedTiers}
+        setSelectedTiers={setSelectedTiers}
       />
+
+      <FilteredStatsCards organizations={filteredOrganizations} isLoading={isLoading} />
 
       <OrganizationsTable
         organizations={filteredOrganizations}
