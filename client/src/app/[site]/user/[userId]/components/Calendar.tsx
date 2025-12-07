@@ -34,7 +34,11 @@ export const VisitCalendar = ({ sessionCount }: { sessionCount: UserSessionCount
       from={fromDate}
       to={toDate}
       emptyColor={resolvedTheme === "dark" ? "hsl(var(--neutral-750))" : "hsl(var(--neutral-100))"}
-      colors={["#10452A", "#006D32", "#3E9058", "#3CD456"]}
+      colors={
+        resolvedTheme === "dark"
+          ? ["#10452A", "#006D32", "#3E9058", "#3CD456"]
+          : ["#9be9a8", "#40c463", "#30a14e", "#216e39"]
+      }
       margin={{ top: 20, right: 0, bottom: 0, left: 0 }}
       dayBorderWidth={2}
       daySpacing={3}
