@@ -134,6 +134,10 @@ See how Rybbit compares to other analytics solutions:
 
 [![Star History Chart](https://api.star-history.com/svg?repos=rybbit-io/rybbit&type=Date)](https://www.star-history.com/#rybbit-io/rybbit&Date)
 
+## Sponsors
+
+<!-- sponsors --><!-- sponsors -->
+
 ## Partners
 
 <table align="center">
