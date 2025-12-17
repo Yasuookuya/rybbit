@@ -56,6 +56,12 @@ export function CustomHeader() {
             >
               Blog
             </Link>
+            <Link
+              href="/sponsors"
+              className="text-sm font-base text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white transition-colors"
+            >
+              Sponsors
+            </Link>
           </div>
         </div>
 
