@@ -117,7 +117,7 @@ export function OutboundLinksList({ outboundLinks, isLoading, size = "small" }: 
 
   return (
     <ScrollArea className="h-[394px]">
-      <div className="flex flex-col gap-2 pr-2">
+      <div className="flex flex-col gap-2 pr-2 overflow-x-hidden">
         {outboundLinks.map((link, index) => {
           const percentageOfMax = (link.count / maxCount) * 100;
           const percentage = (link.count / totalCount) * 100;

@@ -88,7 +88,7 @@ export function StandardSection({
         <div>{countLabel || "Sessions"}</div>
       </div>
       <ScrollArea className="h-[314px]">
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-2 overflow-x-hidden">
           {isLoading ? (
             <StandardSkeleton />
           ) : error ? (

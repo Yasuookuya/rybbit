@@ -13,7 +13,7 @@ export function EndpointList() {
       <div className="p-3 border-b border-neutral-100 dark:border-neutral-850">
         <h2 className="text-sm font-semibold text-neutral-900 dark:text-neutral-100">Endpoints</h2>
       </div>
-      <div className="p-2">
+      <div className="p-2 overflow-x-hidden">
         {endpointCategories.map(category => (
           <div key={category.name} className="mb-4">
             <h3 className="px-2 py-1 text-xs font-medium text-neutral-500 dark:text-neutral-400 uppercase tracking-wider">

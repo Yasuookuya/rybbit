@@ -269,7 +269,9 @@ export function ReplayBreadcrumbs() {
             id={data.metadata.user_id}
             size={24}
             lastActiveTime={
-              data.metadata.end_time ? DateTime.fromSQL(data.metadata.end_time, { zone: "utc" }).setZone(getTimezone()) : undefined
+              data.metadata.end_time
+                ? DateTime.fromSQL(data.metadata.end_time, { zone: "utc" }).setZone(getTimezone())
+                : undefined
             }
           />
           <span className="truncate max-w-[120px]">{getUserDisplayName(data.metadata)}</span>
@@ -284,47 +286,49 @@ export function ReplayBreadcrumbs() {
           {data.events.length} events captured ({groupedEvents.length} groups)
         </div>
         <ScrollArea className="flex-1 rounded-lg">
-          {groupedEvents.map((group, index) => {
-            const firstEvent = group.events[0];
-            const Icon = getEventIcon(firstEvent);
-            const color = getEventColor(firstEvent);
-            const description = getGroupDescription(group);
-            const startTimeMs = getTime(group.startTime);
-            const endTimeMs = getTime(group.endTime);
-            const durationMs = endTimeMs - startTimeMs;
+          <div className="overflow-x-hidden">
+            {groupedEvents.map((group, index) => {
+              const firstEvent = group.events[0];
+              const Icon = getEventIcon(firstEvent);
+              const color = getEventColor(firstEvent);
+              const description = getGroupDescription(group);
+              const startTimeMs = getTime(group.startTime);
+              const endTimeMs = getTime(group.endTime);
+              const durationMs = endTimeMs - startTimeMs;
 
-            return (
-              <div
-                key={`${group.startTime}-${index}`}
-                className={cn(
-                  "p-2 border-b border-neutral-100 dark:border-neutral-800 bg-white dark:bg-neutral-900",
-                  "hover:bg-neutral-50 dark:hover:bg-neutral-800/80 transition-colors cursor-pointer",
-                  "flex items-center gap-2 group"
-                )}
-                onClick={() => handleGroupClick(group)}
-              >
-                <div className="text-xs text-neutral-600 dark:text-neutral-400 w-10">
-                  {Duration.fromMillis(startTimeMs).toFormat("mm:ss")}
-                </div>
-                <Icon className={cn("w-4 h-4 shrink-0", color)} />
-                <div className="flex-1 min-w-0">
-                  <div className="text-xs text-neutral-900 dark:text-neutral-200 font-medium truncate">
-                    {description}
+              return (
+                <div
+                  key={`${group.startTime}-${index}`}
+                  className={cn(
+                    "p-2 border-b border-neutral-100 dark:border-neutral-800 bg-white dark:bg-neutral-900",
+                    "hover:bg-neutral-50 dark:hover:bg-neutral-800/80 transition-colors cursor-pointer",
+                    "flex items-center gap-2 group"
+                  )}
+                  onClick={() => handleGroupClick(group)}
+                >
+                  <div className="text-xs text-neutral-600 dark:text-neutral-400 w-10">
+                    {Duration.fromMillis(startTimeMs).toFormat("mm:ss")}
                   </div>
-                  {group.count > 1 && durationMs > 0 && (
-                    <div className="text-xs text-neutral-500 dark:text-neutral-500 mt-0.5">
-                      {Duration.fromMillis(durationMs).toFormat("s.SSS")}s duration
+                  <Icon className={cn("w-4 h-4 shrink-0", color)} />
+                  <div className="flex-1 min-w-0">
+                    <div className="text-xs text-neutral-900 dark:text-neutral-200 font-medium truncate">
+                      {description}
+                    </div>
+                    {group.count > 1 && durationMs > 0 && (
+                      <div className="text-xs text-neutral-500 dark:text-neutral-500 mt-0.5">
+                        {Duration.fromMillis(durationMs).toFormat("s.SSS")}s duration
+                      </div>
+                    )}
+                  </div>
+                  {group.count > 5 && (
+                    <div className="text-xs text-neutral-700 dark:text-neutral-500 bg-neutral-100 dark:bg-neutral-800 px-1.5 py-0.5 rounded">
+                      {group.count}
                     </div>
                   )}
                 </div>
-                {group.count > 5 && (
-                  <div className="text-xs text-neutral-700 dark:text-neutral-500 bg-neutral-100 dark:bg-neutral-800 px-1.5 py-0.5 rounded">
-                    {group.count}
-                  </div>
-                )}
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
         </ScrollArea>
       </div>
     </div>

@@ -118,7 +118,7 @@ export function EventList({ events, isLoading, size = "small" }: EventListProps)
   const maxCount = Math.max(...events.map(event => event.count));
 
   return (
-    <div className="flex flex-col gap-2">
+    <div className="flex flex-col gap-2 overflow-x-hidden">
       {events.map(event => {
         const percentageOfMax = (event.count / maxCount) * 100;
         const percentage = (event.count / totalCount) * 100;

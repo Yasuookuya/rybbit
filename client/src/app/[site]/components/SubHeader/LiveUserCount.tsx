@@ -82,7 +82,7 @@ export function LiveUserCount() {
           className="h-[75vh]"
           maskClassName="before:from-white dark:before:from-neutral-950 after:from-white dark:after:from-neutral-950"
         >
-          <div className="space-y-3 p-2 md:p-4 ">
+          <div className="space-y-3 p-2 md:p-4 overflow-x-hidden">
             {isLoading ? (
               <SessionCardSkeleton count={5} />
             ) : sessions.length === 0 ? (

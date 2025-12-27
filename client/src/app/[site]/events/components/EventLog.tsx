@@ -73,7 +73,7 @@ export function EventLog() {
 
   return (
     <ScrollArea className="h-[80vh]">
-      <div ref={containerRef} className="h-full pr-2">
+      <div ref={containerRef} className="h-full pr-2 overflow-x-hidden">
         {allEvents.map((event, index) => (
           <EventLogItem key={`${event.timestamp}-${index}`} event={event} />
         ))}
